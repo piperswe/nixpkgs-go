@@ -1,4 +1,4 @@
 builds:
   exclude: []
   include:
-    - recentPackages.x86_64-linux.*
+    - packages.x86_64-linux.*
