@@ -155,7 +155,8 @@ stdenv.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/share/go
-    cp -a bin pkg src lib misc api doc go.env VERSION $out/share/go
+    cp -a bin pkg src lib misc api doc VERSION $out/share/go
+    if [[ -f go.env ]]; then cp -a go.env $out/share/go/; fi
     mkdir -p $out/bin
     ln -s $out/share/go/bin/* $out/bin
     runHook postInstall
