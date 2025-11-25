@@ -38,6 +38,8 @@
           }
         );
 
+      lib = inputs.nixpkgs.lib;
+
       normalizeVersion = version: builtins.replaceStrings [ "go" ] [ "" ] version;
       sourceFiles = files: builtins.filter ({ kind, ... }: kind == "source") files;
       goJson = builtins.filter ({ files, ... }: builtins.length (sourceFiles files) == 1) (
@@ -46,18 +48,40 @@
       sourcesFromGo =
         goJson:
         builtins.map (
-          { version, files, ... }:
           {
-            inherit version;
+            version,
+            stable,
+            files,
+            ...
+          }:
+          {
+            inherit version stable;
             source = builtins.elemAt (sourceFiles files) 0;
           }
         ) goJson;
       goSources = sourcesFromGo goJson;
-      recentGoJson = builtins.filter (
-        { version, stable, ... }:
-        stable && ((builtins.compareVersions (normalizeVersion version) "1.24") >= 0)
-      ) goJson;
-      recentGoSources = sourcesFromGo recentGoJson;
+      majorVersions = [
+        "1.25"
+        "1.24"
+        "1.23"
+        "1.22"
+        "1.21"
+        "1.20"
+        "1.19"
+        "1.18"
+        "1.17"
+        "1.16"
+        "1.15"
+        "1.14"
+      ];
+      minorsForMajor =
+        major:
+        builtins.filter (
+          { version, stable, ... }: stable && (lib.strings.hasPrefix "go${major}" version)
+        ) goSources;
+      majorVersionSources =
+        (builtins.map (major: builtins.elemAt (minorsForMajor major) 0) majorVersions)
+        ++ (minorsForMajor (builtins.elemAt majorVersions 0));
 
       goPackages =
         goSources:
@@ -65,7 +89,7 @@
           { pkgs, system }:
           builtins.listToAttrs (
             builtins.map (
-              { version, source }:
+              { version, source, ... }:
               {
                 name = builtins.replaceStrings [ "go" "." ] [ "go-" "-" ] version;
                 value = pkgs.callPackage ./go.nix {
@@ -79,7 +103,7 @@
     in
     {
       packages = goPackages goSources;
-      checks = goPackages recentGoSources;
+      checks = goPackages majorVersionSources;
 
       # Nix formatter
 
