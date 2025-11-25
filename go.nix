@@ -27,10 +27,14 @@ let
   targetCC = pkgsBuildTarget.targetPackages.stdenv.cc;
 
   isCross = stdenv.buildPlatform != stdenv.targetPlatform;
+
+  finalVersion = builtins.replaceStrings [ "go" ] [ "" ] version;
+
+  atLeast = ver: builtins.compareVersions finalVersion ver >= 0;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "go";
-  version = builtins.replaceStrings [ "go" ] [ "" ] version;
+  version = finalVersion;
 
   src = fetchurl {
     url = "https://go.dev/dl/${source.filename}";
@@ -47,34 +51,40 @@ stdenv.mkDerivation (finalAttrs: {
 
   depsTargetTarget = lib.optional stdenv.targetPlatform.isWindows threadsCross.package;
 
+  patches =
+    (
+      if atLeast "1.11" then
+        [ ./patches/remove-tools-1.11.patch ]
+      else if atLeast "1.9" then
+        [ ./patches/remove-tools-1.9.patch ]
+      else if atLeast "1.4" then
+        [ ./patches/remove-tools-1.4.patch ]
+      else
+        [ ]
+    )
+    ++ (
+      if atLeast "1.23" then
+        [ ./patches/go_no_vendor_checks-1.22.patch ]
+      else if atLeast "1.22" then
+        [ ./patches/go_no_vendor_checks-1.22.patch ]
+      else if atLeast "1.21" then
+        [ ./patches/go_no_vendor_checks-1.21.patch ]
+      else if atLeast "1.16" then
+        [ ./patches/go_no_vendor_checks-1.16.patch ]
+      else if atLeast "1.14" then
+        [ ./patches/go_no_vendor_checks-1.14.patch ]
+      else
+        [ ]
+    );
+
   postPatch = ''
+    sed -i 's@"/etc/protocols"@"${iana-etc}/etc/protocols"@g' src/net/lookup_unix.go
+    sed -i 's@"/etc/protocols"@"${iana-etc}/etc/services"@g' src/net/port_unix.go
+    sed -i 's@"/etc/mime.types"@"${mailcap}/etc/mime.types","/etc/mime.types"@g' src/mime/type_unix.go
+    sed -i 's@"/usr/share/zoneinfo/"@"${tzdata}/share/zoneinfo/","/usr/share/zoneinfo/"@g' src/time/zoneinfo_unix.go
+
     patchShebangs .
   '';
-
-  patches = [
-    (
-      if builtins.compareVersions finalAttrs.version "1.25" >= 0 then
-        (replaceVars "${nixpkgsGoDir}/iana-etc-1.25.patch" {
-          iana = iana-etc;
-        })
-      else
-        (replaceVars "${nixpkgsGoDir}/iana-etc-1.17.patch" {
-          iana = iana-etc;
-        })
-    )
-    # Patch the mimetype database location which is missing on NixOS.
-    # but also allow static binaries built with NixOS to run outside nix
-    (replaceVars "${nixpkgsGoDir}/mailcap-1.17.patch" {
-      inherit mailcap;
-    })
-    # prepend the nix path to the zoneinfo files but also leave the original value for static binaries
-    # that run outside a nix server
-    (replaceVars "${nixpkgsGoDir}/tzdata-1.19.patch" {
-      inherit tzdata;
-    })
-    "${nixpkgsGoDir}/remove-tools-1.11.patch"
-    "${nixpkgsGoDir}/go_no_vendor_checks-1.23.patch"
-  ];
 
   inherit (stdenv.targetPlatform.go) GOOS GOARCH GOARM;
   # GOHOSTOS/GOHOSTARCH must match the building system, not the host system.

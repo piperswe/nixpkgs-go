@@ -34,17 +34,13 @@
 
       normalizeVersion = version: builtins.replaceStrings [ "go" ] [ "" ] version;
       goJson = builtins.fromJSON (builtins.readFile ./go.json);
-      goJsonFiltered = builtins.filter (
-        { version, stable, ... }:
-        stable && (builtins.compareVersions (normalizeVersion version) "1.20") >= 0
-      ) goJson;
       goSources = builtins.map (
         { version, files, ... }:
         {
           inherit version;
           source = builtins.elemAt (builtins.filter ({ kind, ... }: kind == "source") files) 0;
         }
-      ) goJsonFiltered;
+      ) goJson;
     in
     {
       packages = forEachSupportedSystem (
