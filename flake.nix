@@ -34,16 +34,18 @@
 
       normalizeVersion = version: builtins.replaceStrings [ "go" ] [ "" ] version;
       goJson = builtins.fromJSON (builtins.readFile ./go.json);
-      goSources = builtins.map (
+      sourcesFromGo = goJson: builtins.map (
         { version, files, ... }:
         {
           inherit version;
           source = builtins.elemAt (builtins.filter ({ kind, ... }: kind == "source") files) 0;
         }
       ) goJson;
-    in
-    {
-      packages = forEachSupportedSystem (
+      goSources = sourcesFromGo goJson;
+      recentGoJson = builtins.filter ({ version, stable, ... }: stable && (builtins.compareVersions version "1.24" >= 0)) goJson;
+      recentGoSources = sourcesFromGo recentGoJson;
+
+      goPackages = goJson: forEachSupportedSystem (
         { pkgs, system }:
         builtins.listToAttrs (
           builtins.map (
@@ -58,6 +60,10 @@
           ) goSources
         )
       );
+    in
+    {
+      packages = goPackages goSources;
+      recentPackages = goPackages recentGoSources;
 
       # Nix formatter
 
