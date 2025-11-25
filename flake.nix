@@ -1,5 +1,5 @@
 {
-  description = "Every Go version (in varying states of disarray & functionality), packaged for Nix";
+  description = "A variety of Go versions, packaged for Nix";
 
   # Flake inputs
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1"; # Stable Nixpkgs (use 0.1 for unstable)
@@ -32,14 +32,19 @@
           }
         );
 
+      normalizeVersion = version: builtins.replaceStrings [ "go" ] [ "" ] version;
       goJson = builtins.fromJSON (builtins.readFile ./go.json);
+      goJsonFiltered = builtins.filter (
+        { version, stable, ... }:
+        stable && (builtins.compareVersions (normalizeVersion version) "1.20") >= 0
+      ) goJson;
       goSources = builtins.map (
         { version, files, ... }:
         {
           inherit version;
           source = builtins.elemAt (builtins.filter ({ kind, ... }: kind == "source") files) 0;
         }
-      ) goJson;
+      ) goJsonFiltered;
     in
     {
       packages = forEachSupportedSystem (
